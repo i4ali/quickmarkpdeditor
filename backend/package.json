@@ -1,0 +1,25 @@
+{
+  "name": "quickmark-pdf-backend",
+  "version": "1.0.0",
+  "description": "Backend API for QuickMark PDF license management and Stripe integration",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "stripe",
+    "license",
+    "pdf"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "stripe": "^14.0.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "nodemailer": "^6.9.7"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}

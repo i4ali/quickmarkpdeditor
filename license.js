@@ -20,22 +20,52 @@ class LicenseManager {
     }
 
     async activatePremium(licenseKey = null) {
-        // Simple activation - in production, verify license key with backend
         if (licenseKey) {
-            // Validate license key format (simple check for demo)
+            // Validate license key format first (client-side check)
             const isValid = this.validateLicenseKey(licenseKey);
             if (!isValid) {
-                throw new Error('Invalid license key');
+                throw new Error('Invalid license key format');
             }
-        }
 
-        await chrome.storage.local.set({
-            isPremium: true,
-            activatedAt: new Date().toISOString(),
-            licenseKey: licenseKey
-        });
-        this.isPremium = true;
-        return true;
+            // Verify with backend API
+            try {
+                const response = await fetch('https://your-backend.vercel.app/api/validate-license', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ licenseKey })
+                });
+
+                const result = await response.json();
+
+                if (!result.valid) {
+                    throw new Error(result.error || 'Invalid license key');
+                }
+
+                // License is valid, activate premium
+                await chrome.storage.local.set({
+                    isPremium: true,
+                    activatedAt: result.activatedAt || new Date().toISOString(),
+                    licenseKey: licenseKey
+                });
+                this.isPremium = true;
+                return true;
+
+            } catch (error) {
+                console.error('License validation error:', error);
+                throw new Error('Failed to validate license key. Please check your internet connection and try again.');
+            }
+        } else {
+            // Direct activation (for testing or simulated purchase)
+            await chrome.storage.local.set({
+                isPremium: true,
+                activatedAt: new Date().toISOString(),
+                licenseKey: null
+            });
+            this.isPremium = true;
+            return true;
+        }
     }
 
     validateLicenseKey(key) {

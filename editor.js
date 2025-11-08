@@ -762,14 +762,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     purchaseBtn.addEventListener('click', async () => {
-        // In production, this would integrate with payment processor (Stripe, PayPal, etc.)
-        // For now, we'll simulate purchase
-        const confirmPurchase = confirm('Simulate purchase of QuickMark PDF Pro for $3.99?');
-        if (confirmPurchase) {
-            await licenseManager.activatePremium();
-            alert('Thank you for your purchase! Premium features are now unlocked.');
-            upgradeModal.style.display = 'none';
-            await initializePremiumStatus();
+        // Redirect to Stripe Checkout
+        try {
+            // Get email from user (optional - makes checkout faster)
+            const email = prompt('Enter your email for faster checkout (optional):');
+
+            const response = await fetch('https://your-backend.vercel.app/api/create-checkout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: email || undefined })
+            });
+
+            const data = await response.json();
+
+            if (data.url) {
+                // Open Stripe checkout in new tab
+                window.open(data.url, '_blank');
+            } else {
+                throw new Error('Failed to create checkout session');
+            }
+        } catch (error) {
+            console.error('Checkout error:', error);
+            alert('Failed to open checkout. Please try again or contact support.');
         }
     });
 
