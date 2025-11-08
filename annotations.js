@@ -9,6 +9,7 @@ class AnnotationManager {
         this.isDrawing = false;
         this.annotations = [];
         this.tempShape = null;
+        this.isDragging = false;
     }
 
     setTool(toolName) {
@@ -25,6 +26,39 @@ class AnnotationManager {
             this.tempShape.remove();
             this.tempShape = null;
         }
+
+        // Only hide temporary highlight overlays that are direct children of page-container
+        // (saved highlights are inside annotation containers with drag-handles)
+        document.querySelectorAll('.page-container > .highlight-overlay').forEach(overlay => {
+            overlay.style.display = 'none';
+            overlay.style.visibility = 'hidden';
+            overlay.style.opacity = '0';
+            overlay.style.width = '0px';
+            overlay.style.height = '0px';
+        });
+
+        // Remove any leftover temporary shape elements
+        document.querySelectorAll('.shape-rectangle, .shape-circle, .shape-line, .shape-arrow').forEach(el => {
+            // Only remove if it's not inside an annotation container (has drag-handle sibling)
+            const parent = el.parentElement;
+            if (parent && !parent.querySelector('.drag-handle')) {
+                el.remove();
+            }
+        });
+
+        // Remove any temporary decoration elements (they have no class but specific styling)
+        document.querySelectorAll('.page-container > div').forEach(el => {
+            // Check if it's a temporary element (no drag-handle, positioned absolute, has specific styling)
+            if (el.style.position === 'absolute' &&
+                el.style.height === '2px' &&
+                el.style.backgroundColor &&
+                el.style.pointerEvents === 'none' &&
+                !el.querySelector('.drag-handle') &&
+                !el.classList.contains('highlight-overlay') &&
+                !el.className.startsWith('shape-')) {
+                el.remove();
+            }
+        });
     }
 
     // HIGHLIGHTING TOOL
@@ -224,25 +258,40 @@ class AnnotationManager {
     // SHAPES TOOL (Rectangle, Circle, Arrow, Line)
     addShape(shapeType, pageNumber) {
         const pageContainer = document.querySelector(`.page-container[data-page-number="${pageNumber}"]`);
+
+        // Check if shape listeners are already attached to this page
+        if (pageContainer.dataset.shapeEnabled === 'true') {
+            // Just store the new shape type, don't add duplicate listeners
+            pageContainer.dataset.currentShape = shapeType;
+            return;
+        }
+
+        // Mark this page as having shape listeners
+        pageContainer.dataset.shapeEnabled = 'true';
+        pageContainer.dataset.currentShape = shapeType;
+
         let startX, startY;
         let shapeElement;
 
         const onMouseDown = (e) => {
             if (this.currentTool !== 'shapes') return;
 
+            // Get current shape type from dataset
+            const currentShapeType = pageContainer.dataset.currentShape;
+
             const rect = pageContainer.getBoundingClientRect();
             startX = e.clientX - rect.left;
             startY = e.clientY - rect.top;
 
             shapeElement = document.createElement('div');
-            shapeElement.className = `shape-${shapeType}`;
+            shapeElement.className = `shape-${currentShapeType}`;
             shapeElement.style.position = 'absolute';
             shapeElement.style.border = `2px solid ${this.currentColor}`;
             shapeElement.style.pointerEvents = 'none';
 
-            if (shapeType === 'rectangle') {
+            if (currentShapeType === 'rectangle') {
                 shapeElement.style.backgroundColor = 'transparent';
-            } else if (shapeType === 'circle') {
+            } else if (currentShapeType === 'circle') {
                 shapeElement.style.borderRadius = '50%';
                 shapeElement.style.backgroundColor = 'transparent';
             }
@@ -253,11 +302,14 @@ class AnnotationManager {
         const onMouseMove = (e) => {
             if (this.currentTool !== 'shapes' || !startX || !shapeElement) return;
 
+            // Get current shape type from dataset
+            const currentShapeType = pageContainer.dataset.currentShape;
+
             const rect = pageContainer.getBoundingClientRect();
             const currentX = e.clientX - rect.left;
             const currentY = e.clientY - rect.top;
 
-            if (shapeType === 'rectangle' || shapeType === 'circle') {
+            if (currentShapeType === 'rectangle' || currentShapeType === 'circle') {
                 const width = Math.abs(currentX - startX);
                 const height = Math.abs(currentY - startY);
                 const left = Math.min(startX, currentX);
@@ -267,20 +319,23 @@ class AnnotationManager {
                 shapeElement.style.top = top + 'px';
                 shapeElement.style.width = width + 'px';
                 shapeElement.style.height = height + 'px';
-            } else if (shapeType === 'line' || shapeType === 'arrow') {
-                this.drawLine(shapeElement, startX, startY, currentX, currentY, shapeType === 'arrow');
+            } else if (currentShapeType === 'line' || currentShapeType === 'arrow') {
+                this.drawLine(shapeElement, startX, startY, currentX, currentY, currentShapeType === 'arrow');
             }
         };
 
         const onMouseUp = (e) => {
             if (this.currentTool !== 'shapes' || !startX || !shapeElement) return;
 
+            // Get current shape type from dataset
+            const currentShapeType = pageContainer.dataset.currentShape;
+
             const container = this.createAnnotationContainer(shapeElement, pageNumber, 'shape');
             pageContainer.appendChild(container);
 
             this.annotations.push({
                 type: 'shape',
-                subtype: shapeType,
+                subtype: currentShapeType,
                 element: container,
                 page: pageNumber,
                 color: this.currentColor
@@ -336,22 +391,82 @@ class AnnotationManager {
         noteIcon.style.justifyContent = 'center';
         noteIcon.style.fontSize = '18px';
         noteIcon.innerHTML = '📝';
-        noteIcon.title = text || 'Click to add note';
+        // Store actual text in data attribute
+        noteIcon.setAttribute('data-note-text', text);
+        // Set tooltip - show text if exists, otherwise show instruction
+        noteIcon.title = text ? text : 'Click to add/edit note';
 
         const container = this.createAnnotationContainer(noteIcon, pageNumber, 'note');
         pageContainer.appendChild(container);
 
-        noteIcon.addEventListener('click', () => {
-            const newText = prompt('Enter your note:', text);
-            if (newText !== null) {
-                noteIcon.title = newText;
-                // Update annotation
-                const annotation = this.annotations.find(a => a.element === container);
-                if (annotation) {
-                    annotation.text = newText;
+        // Find the cloned note icon inside the container and make it clickable
+        const clonedNoteIcon = container.querySelector('.sticky-note-icon');
+        if (clonedNoteIcon) {
+            clonedNoteIcon.style.pointerEvents = 'auto';
+            clonedNoteIcon.style.zIndex = '999'; // Ensure it's above other elements
+
+            // Create custom tooltip element
+            const tooltip = document.createElement('div');
+            tooltip.className = 'note-tooltip';
+            tooltip.style.position = 'absolute';
+            tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+            tooltip.style.color = 'white';
+            tooltip.style.padding = '6px 10px';
+            tooltip.style.borderRadius = '4px';
+            tooltip.style.fontSize = '12px';
+            tooltip.style.maxWidth = '200px';
+            tooltip.style.wordWrap = 'break-word';
+            tooltip.style.zIndex = '10000';
+            tooltip.style.pointerEvents = 'none';
+            tooltip.style.display = 'none';
+            tooltip.style.whiteSpace = 'pre-wrap';
+            document.body.appendChild(tooltip);
+
+            // Show tooltip on hover
+            clonedNoteIcon.addEventListener('mouseenter', (e) => {
+                const noteText = clonedNoteIcon.getAttribute('data-note-text') || '';
+                tooltip.textContent = noteText ? noteText : 'Click to add/edit note';
+                tooltip.style.display = 'block';
+
+                // Position tooltip near the note
+                const rect = clonedNoteIcon.getBoundingClientRect();
+                tooltip.style.left = (rect.right + 10) + 'px';
+                tooltip.style.top = rect.top + 'px';
+            });
+
+            clonedNoteIcon.addEventListener('mouseleave', (e) => {
+                tooltip.style.display = 'none';
+            });
+
+            // Prevent mousedown from bubbling (which would create new note)
+            clonedNoteIcon.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+
+            clonedNoteIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                // Hide tooltip during edit
+                tooltip.style.display = 'none';
+
+                // Get current text from data attribute
+                const currentText = clonedNoteIcon.getAttribute('data-note-text') || '';
+                const newText = prompt('Enter your note:', currentText);
+                if (newText !== null) {
+                    // Update data attribute
+                    clonedNoteIcon.setAttribute('data-note-text', newText);
+                    // Update annotation
+                    const annotation = this.annotations.find(a => a.element === container);
+                    if (annotation) {
+                        annotation.text = newText;
+                    }
                 }
-            }
-        });
+            });
+
+            // Store tooltip reference for cleanup
+            container._tooltip = tooltip;
+        }
 
         this.annotations.push({
             type: 'note',
@@ -484,6 +599,10 @@ class AnnotationManager {
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
+            // Clean up tooltip if it exists
+            if (container._tooltip) {
+                container._tooltip.remove();
+            }
             container.remove();
             this.annotations = this.annotations.filter(a => a.element !== container);
         });
@@ -500,11 +619,16 @@ class AnnotationManager {
 
     makeDraggable(element) {
         let offsetX, offsetY;
+        let hasMoved = false;
         const handle = element.querySelector('.drag-handle');
+        const self = this;
 
         handle.onmousedown = (e) => {
             e.preventDefault();
             e.stopPropagation();
+
+            hasMoved = false;
+            self.isDragging = false;
 
             offsetX = e.clientX - element.offsetLeft;
             offsetY = e.clientY - element.offsetTop;
@@ -516,6 +640,9 @@ class AnnotationManager {
         function elementDrag(e) {
             e.preventDefault();
 
+            hasMoved = true;
+            self.isDragging = true;
+
             const x = e.clientX - offsetX;
             const y = e.clientY - offsetY;
 
@@ -526,6 +653,15 @@ class AnnotationManager {
         function closeDragElement() {
             document.onmouseup = null;
             document.onmousemove = null;
+
+            // Set isDragging to false after a short delay to prevent click event
+            if (hasMoved) {
+                setTimeout(() => {
+                    self.isDragging = false;
+                }, 50);
+            } else {
+                self.isDragging = false;
+            }
         }
     }
 
@@ -535,6 +671,10 @@ class AnnotationManager {
 
     clearAllAnnotations() {
         this.annotations.forEach(annotation => {
+            // Clean up tooltip if it exists
+            if (annotation.element._tooltip) {
+                annotation.element._tooltip.remove();
+            }
             annotation.element.remove();
         });
         this.annotations = [];

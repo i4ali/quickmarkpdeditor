@@ -396,16 +396,31 @@ async function savePdf() {
                                 borderWidth: 2,
                             });
                         } else if (annotation.subtype === 'line' || annotation.subtype === 'arrow') {
+                            // Get container position relative to page, then subtract canvas offset
+                            const containerLeft = parseFloat(element.style.left) || 0;
+                            const containerTop = parseFloat(element.style.top) || 0;
+
+                            // Get canvas position relative to page container
+                            const canvasRect = canvas.getBoundingClientRect();
+                            const pageRect = pageContainer.getBoundingClientRect();
+                            const canvasOffsetX = canvasRect.left - pageRect.left;
+                            const canvasOffsetY = canvasRect.top - pageRect.top;
+
+                            // Calculate arrow start position relative to canvas
+                            const startX = (containerLeft - canvasOffsetX) / scale;
+                            const startY = (containerTop - canvasOffsetY) / scale;
+
                             const transform = shapeDiv.style.transform;
                             const rotation = parseFloat(transform.match(/rotate\(([-\d.]+)deg\)/)?.[1] || 0);
-                            const lineWidth = parseFloat(shapeDiv.style.width) || 100;
+                            // Get line width from container, not cloned element (which has width='100%')
+                            const lineWidth = parseFloat(element.style.width) || element.offsetWidth;
 
                             const rad = rotation * Math.PI / 180;
-                            const x2 = x + (lineWidth / scale) * Math.cos(rad);
-                            const y2 = y + (lineWidth / scale) * Math.sin(rad);
+                            const x2 = startX + (lineWidth / scale) * Math.cos(rad);
+                            const y2 = startY + (lineWidth / scale) * Math.sin(rad);
 
                             targetPage.drawLine({
-                                start: { x: x, y: targetPage.getHeight() - y },
+                                start: { x: startX, y: targetPage.getHeight() - startY },
                                 end: { x: x2, y: targetPage.getHeight() - y2 },
                                 thickness: 2,
                                 color: rgb(color.r / 255, color.g / 255, color.b / 255),
@@ -445,24 +460,108 @@ async function savePdf() {
                     const x = (rect.left - canvasRect.left) / scale;
                     const y = (rect.top - canvasRect.top) / scale;
 
-                    targetPage.drawRectangle({
-                        x: x,
-                        y: targetPage.getHeight() - y - 30,
-                        width: 30,
-                        height: 30,
-                        color: rgb(1, 0.84, 0),
-                        borderColor: rgb(1, 0.65, 0),
-                        borderWidth: 1,
-                    });
+                    // Get text from the data attribute on the note icon
+                    const noteIcon = element.querySelector('.sticky-note-icon');
+                    const noteText = noteIcon ? (noteIcon.getAttribute('data-note-text') || annotation.text || '') : (annotation.text || '');
 
-                    if (annotation.text) {
-                        targetPage.drawText('Note: ' + annotation.text, {
-                            x: x + 35,
-                            y: targetPage.getHeight() - y - 20,
-                            font: await pdfDoc.embedFont(StandardFonts.Helvetica),
-                            size: 10,
-                            color: rgb(0, 0, 0),
-                            maxWidth: 200,
+                    if (noteText && noteText.trim()) {
+                        // Draw sticky note with text inside
+                        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                        const fontSize = 9;
+                        const maxWidth = 120;
+                        const padding = 5;
+
+                        // Word wrap the text with character-level breaking for long words
+                        const words = noteText.split(' ');
+                        const lines = [];
+                        let currentLine = '';
+                        const maxLineWidth = maxWidth - (padding * 2);
+
+                        for (const word of words) {
+                            const testLine = currentLine ? currentLine + ' ' + word : word;
+                            const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+                            if (testWidth <= maxLineWidth) {
+                                // Word fits on current line
+                                currentLine = testLine;
+                            } else {
+                                // Word doesn't fit
+                                const wordWidth = font.widthOfTextAtSize(word, fontSize);
+
+                                if (wordWidth <= maxLineWidth) {
+                                    // Word fits on its own line
+                                    if (currentLine) {
+                                        lines.push(currentLine);
+                                    }
+                                    currentLine = word;
+                                } else {
+                                    // Word is too long, need character-level breaking
+                                    if (currentLine) {
+                                        lines.push(currentLine);
+                                        currentLine = '';
+                                    }
+
+                                    // Break the long word character by character
+                                    let remainingWord = word;
+                                    while (remainingWord.length > 0) {
+                                        let chunk = '';
+                                        for (let i = 1; i <= remainingWord.length; i++) {
+                                            const testChunk = remainingWord.substring(0, i);
+                                            if (font.widthOfTextAtSize(testChunk, fontSize) <= maxLineWidth) {
+                                                chunk = testChunk;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        if (chunk.length === 0) {
+                                            // Even single character doesn't fit, take at least one char
+                                            chunk = remainingWord.substring(0, 1);
+                                        }
+                                        lines.push(chunk);
+                                        remainingWord = remainingWord.substring(chunk.length);
+                                    }
+                                }
+                            }
+                        }
+                        if (currentLine) {
+                            lines.push(currentLine);
+                        }
+
+                        const lineHeight = fontSize + 2;
+                        const noteHeight = Math.max(40, lines.length * lineHeight + padding * 2);
+                        const noteWidth = maxWidth;
+
+                        // Draw the sticky note background
+                        targetPage.drawRectangle({
+                            x: x,
+                            y: targetPage.getHeight() - y - noteHeight,
+                            width: noteWidth,
+                            height: noteHeight,
+                            color: rgb(1, 0.96, 0.7),
+                            borderColor: rgb(1, 0.8, 0.2),
+                            borderWidth: 1,
+                        });
+
+                        // Draw text lines inside the note
+                        lines.forEach((line, index) => {
+                            targetPage.drawText(line, {
+                                x: x + padding,
+                                y: targetPage.getHeight() - y - padding - (index + 1) * lineHeight,
+                                font: font,
+                                size: fontSize,
+                                color: rgb(0, 0, 0),
+                            });
+                        });
+                    } else {
+                        // Draw empty sticky note (just the icon)
+                        targetPage.drawRectangle({
+                            x: x,
+                            y: targetPage.getHeight() - y - 30,
+                            width: 30,
+                            height: 30,
+                            color: rgb(1, 0.84, 0),
+                            borderColor: rgb(1, 0.65, 0),
+                            borderWidth: 1,
                         });
                     }
                 } else if (type === 'text-decoration') {
@@ -596,6 +695,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     addTextButton.addEventListener('click', () => {
+        // Deactivate any active annotation tool before adding text
+        annotationManager.setTool(null);
+        setActiveTool(null);
+        colorPicker.style.display = 'none';
         addDraggableText();
     });
 
@@ -608,6 +711,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     addSignatureButton.addEventListener('click', () => {
         if (savedSignature) {
+            // Deactivate any active annotation tool before adding signature
+            annotationManager.setTool(null);
+            setActiveTool(null);
+            colorPicker.style.display = 'none';
             addDraggableSignature(savedSignature);
         } else {
             alert('Please save a signature first.');
@@ -797,10 +904,12 @@ function setActiveTool(toolName) {
     const allTools = document.querySelectorAll('#toolbar button.premium');
     allTools.forEach(btn => btn.style.border = 'none');
 
-    // Set active tool styling
-    const activeButton = document.getElementById(`${toolName}-btn`);
-    if (activeButton) {
-        activeButton.style.border = '3px solid #FFD700';
+    // Set active tool styling if toolName is provided
+    if (toolName) {
+        const activeButton = document.getElementById(`${toolName}-btn`);
+        if (activeButton) {
+            activeButton.style.border = '3px solid #FFD700';
+        }
     }
 
     currentActiveTool = toolName;
@@ -841,6 +950,9 @@ function setupNotesMode() {
 
         const clickHandler = (e) => {
             if (currentActiveTool !== 'notes') return;
+
+            // Don't create a new note if we just finished dragging
+            if (annotationManager.isDragging) return;
 
             const rect = container.getBoundingClientRect();
             const x = e.clientX - rect.left;
