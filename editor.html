@@ -12,6 +12,7 @@
             width: 100%;
             height: 100%;
             background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
         }
         #toolbar {
             display: flex;
@@ -19,47 +20,292 @@
             align-items: center;
             background-color: #333;
             padding: 10px;
+            flex-wrap: wrap;
+            gap: 5px;
         }
         #toolbar button {
-            margin: 0 10px;
+            margin: 0 5px;
             padding: 8px 16px;
             cursor: pointer;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        #toolbar button:hover {
+            background-color: #666;
+        }
+        #toolbar button.premium {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+        }
+        #toolbar button.premium:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #toolbar button.premium.locked::after {
+            content: '🔒';
+            margin-left: 5px;
+        }
+        #toolbar .separator {
+            width: 2px;
+            height: 30px;
+            background-color: #666;
+            margin: 0 10px;
+        }
+        #toolbar .color-picker {
+            display: inline-flex;
+            gap: 5px;
+        }
+        #toolbar .color-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid white;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        #toolbar .color-btn:hover {
+            transform: scale(1.2);
+        }
+        #toolbar .color-btn.active {
+            border: 3px solid #FFD700;
+            transform: scale(1.1);
+        }
+        .premium-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
         }
         #pdf-viewer {
             width: 100%;
-            height: calc(100% - 50px);
+            height: calc(100% - 70px);
             overflow: auto;
+            position: relative;
         }
         #pdf-viewer canvas {
             display: block;
             margin: 0 auto;
         }
+        .page-container {
+            position: relative;
+            margin: 20px auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            max-width: 500px;
+            text-align: center;
+        }
+        .modal-content h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .modal-content button {
+            margin: 10px 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .modal-content .primary-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .modal-content .secondary-btn {
+            background-color: #ccc;
+            color: #333;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        /* Upgrade Modal Specific */
+        #upgrade-modal .price {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        #upgrade-modal .features {
+            text-align: left;
+            margin: 20px 0;
+        }
+        #upgrade-modal .features li {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        /* Shape Selector */
+        .shape-selector {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        .shape-selector button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 8px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .shape-selector button:hover {
+            background: #666;
+        }
     </style>
 </head>
 <body>
     <div id="toolbar">
+        <!-- Free Tools -->
         <input type="file" id="file-input" accept=".pdf" style="display: none;">
-        <button id="open-pdf">Open PDF</button>
-        <button id="add-text">Add Text</button>
-        <button id="manage-signature">Manage Signature</button>
-        <button id="add-signature">Add Signature</button>
-        <button id="save-pdf">Save & Download</button>
+        <button id="open-pdf">📂 Open PDF</button>
+        <button id="add-text">📝 Add Text</button>
+        <button id="manage-signature">✍️ Manage Signature</button>
+        <button id="add-signature">📋 Add Signature</button>
+
+        <div class="separator"></div>
+
+        <!-- Premium Tools -->
+        <button id="highlight-btn" class="premium locked" disabled>
+            🖍️ Highlight
+        </button>
+
+        <button id="draw-btn" class="premium locked" disabled>
+            ✏️ Draw
+        </button>
+
+        <button id="shapes-btn" class="premium locked" disabled>
+            ⬜ Shapes
+        </button>
+
+        <button id="notes-btn" class="premium locked" disabled>
+            📌 Notes
+        </button>
+
+        <button id="decoration-btn" class="premium locked" disabled>
+            ↔️ Text Line
+        </button>
+
+        <!-- Color Picker (hidden until premium tool selected) -->
+        <div id="color-picker" class="color-picker" style="display: none;">
+            <div class="color-btn" data-color="#FFFF00" style="background-color: #FFFF00;" title="Yellow"></div>
+            <div class="color-btn" data-color="#00FF00" style="background-color: #00FF00;" title="Green"></div>
+            <div class="color-btn" data-color="#00BFFF" style="background-color: #00BFFF;" title="Blue"></div>
+            <div class="color-btn" data-color="#FF69B4" style="background-color: #FF69B4;" title="Pink"></div>
+            <div class="color-btn" data-color="#FF0000" style="background-color: #FF0000;" title="Red"></div>
+            <div class="color-btn" data-color="#000000" style="background-color: #000000;" title="Black"></div>
+        </div>
+
+        <div class="separator"></div>
+
+        <button id="reset-btn" style="background-color: #dc3545; color: white;">
+            ↺ Reset All
+        </button>
+
+        <button id="save-pdf">💾 Save & Download</button>
+
+        <div class="separator"></div>
+
+        <button id="upgrade-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-weight: bold;">
+            ⭐ Upgrade to Pro
+        </button>
     </div>
+
     <div id="pdf-viewer"></div>
 
-    <div id="signature-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center;">
-        <div style="background-color: #fff; padding: 20px;">
+    <!-- Signature Modal -->
+    <div id="signature-modal" class="modal">
+        <div class="modal-content">
+            <h2>Manage Signature</h2>
             <canvas id="signature-canvas" width="400" height="200" style="border: 1px solid #000;"></canvas>
             <br>
-            <button id="save-signature">Save Signature</button>
-            <button id="clear-signature">Clear Signature</button>
-            <button id="close-modal">Close</button>
+            <button id="save-signature" class="primary-btn">Save Signature</button>
+            <button id="clear-signature" class="secondary-btn">Clear</button>
+            <button id="close-modal" class="secondary-btn">Close</button>
         </div>
+    </div>
+
+    <!-- Upgrade Modal -->
+    <div id="upgrade-modal" class="modal">
+        <div class="modal-content">
+            <h2>🚀 Upgrade to QuickMark PDF Pro</h2>
+            <div class="price">$3.99</div>
+            <p style="color: #666; margin-top: -10px;">One-time lifetime purchase</p>
+
+            <ul class="features">
+                <li>🖍️ <strong>Highlighting</strong> - 5 colors (yellow, green, blue, pink, red)</li>
+                <li>✏️ <strong>Freehand Drawing</strong> - Draw and annotate freely</li>
+                <li>⬜ <strong>Shapes</strong> - Rectangles, circles, arrows, lines</li>
+                <li>📌 <strong>Sticky Notes</strong> - Add comments anywhere</li>
+                <li>↔️ <strong>Text Decorations</strong> - Strikethrough & underline</li>
+            </ul>
+
+            <button id="purchase-btn" class="primary-btn" style="font-size: 16px; padding: 12px 30px;">
+                💳 Purchase Now - $3.99
+            </button>
+
+            <p style="margin-top: 20px; font-size: 12px; color: #666;">
+                Or activate with license key:
+            </p>
+            <input type="text" id="license-key-input" placeholder="Enter license key (QMPDF-XXXXX-XXXXX-XXXXX)">
+            <button id="activate-license-btn" class="secondary-btn">Activate License</button>
+
+            <br><br>
+            <button id="close-upgrade-modal" class="secondary-btn">Maybe Later</button>
+        </div>
+    </div>
+
+    <!-- Shape Selector Popup -->
+    <div id="shape-selector" class="shape-selector">
+        <button data-shape="rectangle">Rectangle</button>
+        <button data-shape="circle">Circle</button>
+        <button data-shape="arrow">Arrow</button>
+        <button data-shape="line">Line</button>
     </div>
 
     <script src="lib/pdf.min.js"></script>
     <script src="lib/pdf-lib.min.js"></script>
     <script src="lib/signature_pad.umd.js"></script>
+    <script src="license.js"></script>
+    <script src="annotations.js"></script>
     <script src="editor.js"></script>
 </body>
 </html>

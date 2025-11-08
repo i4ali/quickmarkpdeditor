@@ -2,12 +2,10 @@
 {
     "manifest_version": 3,
     "name": "QuickMark PDF",
-    "version": "1.0",
-    "description": "Quickly and privately edit and sign PDFs in your browser.",
+    "version": "2.0",
+    "description": "Quickly and privately edit, sign, and annotate PDFs in your browser. Premium features: highlighting, drawing, shapes, notes & more!",
     "permissions": [
-        "storage",
-        "activeTab",
-        "scripting"
+        "storage"
     ],
     "action": {
         "default_popup": "popup.html",
@@ -28,7 +26,9 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "editor.html"
+                "editor.html",
+                "license.js",
+                "annotations.js"
             ],
             "matches": [
                 "<all_urls>"
