@@ -1,0 +1,17 @@
+{
+  "name": "quickmark-pdf-backend-simple",
+  "version": "1.0.0",
+  "description": "Simplified backend - No database, JWT-based licenses",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "stripe": "^14.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.7"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}

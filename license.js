@@ -1,5 +1,5 @@
 // License Management System for QuickMark PDF Premium
-// Handles $3.99 lifetime purchase verification and storage
+// Handles $2.99 lifetime purchase verification and storage
 
 class LicenseManager {
     constructor() {
@@ -21,15 +21,21 @@ class LicenseManager {
 
     async activatePremium(licenseKey = null) {
         if (licenseKey) {
-            // Validate license key format first (client-side check)
-            const isValid = this.validateLicenseKey(licenseKey);
-            if (!isValid) {
-                throw new Error('Invalid license key format');
-            }
+            // Remove ALL whitespace including line breaks, tabs, etc.
+            console.log('Raw key before cleaning:', licenseKey.length, 'chars');
+            licenseKey = licenseKey.replace(/\s/g, '');
+            console.log('After removing whitespace:', licenseKey.length, 'chars');
+
+            // Show first/last characters
+            console.log('First 3 chars:', JSON.stringify(licenseKey.substring(0, 3)));
+            console.log('Last 3 chars:', JSON.stringify(licenseKey.substring(licenseKey.length - 3)));
 
             // Verify with backend API
             try {
-                const response = await fetch('https://your-backend.vercel.app/api/validate-license', {
+                console.log('Validating license key:', licenseKey.substring(0, 50) + '...');
+                console.log('Key length:', licenseKey.length);
+
+                const response = await fetch('https://backend-simple-imran-alis-projects-6d47b4c0.vercel.app/api/validate-license', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -38,6 +44,11 @@ class LicenseManager {
                 });
 
                 const result = await response.json();
+                console.log('Backend response:', JSON.stringify(result, null, 2));
+
+                if (!response.ok) {
+                    throw new Error(result.error || `Server error: ${response.status}`);
+                }
 
                 if (!result.valid) {
                     throw new Error(result.error || 'Invalid license key');
@@ -46,7 +57,7 @@ class LicenseManager {
                 // License is valid, activate premium
                 await chrome.storage.local.set({
                     isPremium: true,
-                    activatedAt: result.activatedAt || new Date().toISOString(),
+                    activatedAt: result.purchaseDate || new Date().toISOString(),
                     licenseKey: licenseKey
                 });
                 this.isPremium = true;
@@ -54,7 +65,7 @@ class LicenseManager {
 
             } catch (error) {
                 console.error('License validation error:', error);
-                throw new Error('Failed to validate license key. Please check your internet connection and try again.');
+                throw error; // Re-throw the original error instead of generic message
             }
         } else {
             // Direct activation (for testing or simulated purchase)

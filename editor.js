@@ -767,7 +767,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             // Get email from user (optional - makes checkout faster)
             const email = prompt('Enter your email for faster checkout (optional):');
 
-            const response = await fetch('https://your-backend.vercel.app/api/create-checkout', {
+            const response = await fetch('https://backend-simple-imran-alis-projects-6d47b4c0.vercel.app/api/create-checkout', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -803,7 +803,8 @@ window.addEventListener('DOMContentLoaded', async () => {
             licenseKeyInput.value = '';
             await initializePremiumStatus();
         } catch (error) {
-            alert('Invalid license key. Please check and try again.');
+            console.error('License activation error:', error);
+            alert(`Error: ${error.message}`);
         }
     });
 
