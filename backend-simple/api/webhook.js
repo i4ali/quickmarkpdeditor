@@ -18,16 +18,16 @@ const getRawBody = async (req) => {
   });
 };
 
-// Email transporter
-const transporter = nodemailer.createTransporter({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
-
 async function sendLicenseEmail(email, licenseKey) {
+  // Create transporter inside function to avoid cold start issues
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to: email,
